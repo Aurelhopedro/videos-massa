@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Configurações — VideosMassa Browser</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <strong style="flex:1;padding-left:8px;">Configurações</strong>
+  </div>
+
+  <main>
+    <div class="section-title">Aparência</div>
+    <div class="form-row">
+      <label>Tema</label>
+      <select id="themeSelect">
+        <option value="auto">Automático</option>
+        <option value="light">Claro</option>
+        <option value="dark">Escuro</option>
+      </select>
+    </div>
+
+    <div class="section-title">Pesquisa</div>
+    <div class="form-row">
+      <label>Motor de pesquisa padrão</label>
+      <select id="engineSelect">
+        <option value="google">Google</option>
+        <option value="bing">Bing</option>
+        <option value="duckduckgo">DuckDuckGo</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Página inicial</label>
+      <input type="text" id="homepageInput" placeholder="https://www.google.com">
+    </div>
+
+    <div class="section-title">Dados</div>
+    <div class="card">
+      <button class="ghost" id="clearHistoryBtn">Limpar histórico</button>
+      <button class="ghost" id="clearFavoritesBtn" style="margin-top:8px;">Limpar favoritos</button>
+      <button class="ghost" id="clearDownloadsBtn" style="margin-top:8px;">Limpar lista de downloads</button>
+    </div>
+
+    <div class="section-title">Backup</div>
+    <div class="card">
+      <button class="primary" id="backupBtn">Gerar backup</button>
+      <button class="ghost" id="restoreBtn" style="margin-left:8px;">Restaurar backup</button>
+      <input type="file" id="restoreFile" accept="application/json" style="display:none;">
+    </div>
+
+    <div class="section-title">Sobre</div>
+    <div class="card" style="font-size:13px;color:var(--text-muted);">
+      <p>VideosMassa Browser — navegador leve com abas, favoritos, histórico e downloads,
+      construído com HTML, CSS e JavaScript puro, dados salvos localmente no dispositivo (IndexedDB).</p>
+      <p><strong>Privacidade:</strong> nenhum dado de navegação é enviado a servidores externos;
+      tudo fica armazenado apenas no seu aparelho.</p>
+    </div>
+  </main>
+
+  <nav class="bottombar">
+    <a href="index.html">🏠<span>Início</span></a>
+    <a href="browser.html">🌐<span>Navegar</span></a>
+    <a href="favorites.html">⭐<span>Favoritos</span></a>
+    <a href="history.html">🕓<span>Histórico</span></a>
+    <a href="downloads.html">⬇️<span>Downloads</span></a>
+  </nav>
+
+  <script src="js/db.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/history.js"></script>
+  <script src="js/favorites.js"></script>
+  <script>
+    async function loadSettings() {
+      document.getElementById('themeSelect').value = await DB.getSetting('theme', 'auto');
+      document.getElementById('engineSelect').value = await DB.getSetting('searchEngine', 'google');
+      document.getElementById('homepageInput').value = await DB.getSetting('homepage', 'https://www.google.com');
+    }
+
+    document.getElementById('themeSelect').addEventListener('change', (e) => Theme.set(e.target.value));
+    document.getElementById('engineSelect').addEventListener('change', (e) => DB.setSetting('searchEngine', e.target.value));
+    document.getElementById('homepageInput').addEventListener('change', (e) => DB.setSetting('homepage', e.target.value));
+
+    document.getElementById('clearHistoryBtn').addEventListener('click', async () => {
+      if (confirm('Limpar todo o histórico?')) { await History.clear(); showToast('Histórico limpo'); }
+    });
+    document.getElementById('clearFavoritesBtn').addEventListener('click', async () => {
+      if (confirm('Limpar todos os favoritos?')) { await DB.clear('favorites'); showToast('Favoritos limpos'); }
+    });
+    document.getElementById('clearDownloadsBtn').addEventListener('click', async () => {
+      if (confirm('Limpar lista de downloads?')) { await DB.clear('downloads'); showToast('Lista de downloads limpa'); }
+    });
+
+    document.getElementById('backupBtn').addEventListener('click', async () => {
+      const backup = {
+        favorites: await DB.getAll('favorites'),
+        history: await DB.getAll('history'),
+        settings: await DB.getAll('settings'),
+        downloads: await DB.getAll('downloads')
+      };
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'backup-videosmassa.json'; a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('restoreBtn').addEventListener('click', () => document.getElementById('restoreFile').click());
+    document.getElementById('restoreFile').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const data = JSON.parse(await file.text());
+      for (const store of ['favorites', 'history', 'settings', 'downloads']) {
+        if (!data[store]) continue;
+        for (const item of data[store]) {
+          const { id, ...rest } = item;
+          await DB.add(store, rest);
+        }
+      }
+      showToast('Backup restaurado');
+      loadSettings();
+    });
+
+    loadSettings();
+  </script>
+</body>
+</html>
