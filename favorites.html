@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Favoritos — VideosMassa Browser</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <strong style="flex:1;padding-left:8px;">Favoritos</strong>
+    <button class="icon-btn" id="exportBtn">⬇</button>
+    <button class="icon-btn" id="importBtn">⬆</button>
+  </div>
+
+  <main>
+    <input type="text" id="searchFav" placeholder="Pesquisar favoritos" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);margin-bottom:14px;">
+    <div id="foldersContainer"></div>
+    <input type="file" id="importFile" accept="application/json" style="display:none;">
+  </main>
+
+  <nav class="bottombar">
+    <a href="index.html">🏠<span>Início</span></a>
+    <a href="browser.html">🌐<span>Navegar</span></a>
+    <a href="favorites.html" class="active">⭐<span>Favoritos</span></a>
+    <a href="history.html">🕓<span>Histórico</span></a>
+    <a href="downloads.html">⬇️<span>Downloads</span></a>
+  </nav>
+
+  <script src="js/db.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/favorites.js"></script>
+  <script>
+    async function render(filter = '') {
+      const grouped = await Favorites.byFolder();
+      const el = document.getElementById('foldersContainer');
+      const folders = Object.keys(grouped);
+      if (folders.length === 0) { el.innerHTML = '<div class="empty-state">Nenhum favorito ainda. Toque na estrela ao navegar para adicionar.</div>'; return; }
+
+      el.innerHTML = folders.map(folder => {
+        const items = grouped[folder].filter(f =>
+          !filter || f.title.toLowerCase().includes(filter) || f.url.toLowerCase().includes(filter));
+        if (items.length === 0) return '';
+        return `
+          <div class="section-title">${sanitizeText(folder)}</div>
+          ${items.map(f => `
+            <div class="list-item">
+              <div class="favicon" style="width:32px;height:32px;border-radius:8px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-weight:700;">${faviconLetter(f.url)}</div>
+              <div class="meta" onclick="location.href='browser.html?url=${encodeURIComponent(f.url)}'">
+                <div class="title">${sanitizeText(f.title)}</div>
+                <div class="sub">${sanitizeText(f.url)}</div>
+              </div>
+              <button class="icon-btn" onclick="removeFav(${f.id})">🗑</button>
+            </div>`).join('')}
+        `;
+      }).join('');
+    }
+
+    async function removeFav(id) {
+      await Favorites.remove(id);
+      render();
+    }
+
+    document.getElementById('searchFav').addEventListener('input', e => render(e.target.value.toLowerCase()));
+
+    document.getElementById('exportBtn').addEventListener('click', async () => {
+      const json = await Favorites.exportJson();
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'favoritos.json'; a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
+    document.getElementById('importFile').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const text = await file.text();
+      await Favorites.importJson(text);
+      showToast('Favoritos importados');
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>
