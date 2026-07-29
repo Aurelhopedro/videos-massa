@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Histórico — VideosMassa Browser</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <strong style="flex:1;padding-left:8px;">Histórico</strong>
+    <button class="icon-btn" id="clearBtn">🗑</button>
+  </div>
+
+  <main>
+    <input type="text" id="searchHist" placeholder="Pesquisar no histórico" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);margin-bottom:14px;">
+    <div id="list"></div>
+  </main>
+
+  <nav class="bottombar">
+    <a href="index.html">🏠<span>Início</span></a>
+    <a href="browser.html">🌐<span>Navegar</span></a>
+    <a href="favorites.html">⭐<span>Favoritos</span></a>
+    <a href="history.html" class="active">🕓<span>Histórico</span></a>
+    <a href="downloads.html">⬇️<span>Downloads</span></a>
+  </nav>
+
+  <script src="js/db.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/history.js"></script>
+  <script>
+    async function render(filter = '') {
+      const items = filter ? await History.search(filter) : await History.all();
+      const el = document.getElementById('list');
+      if (items.length === 0) { el.innerHTML = '<div class="empty-state">Nenhum registro no histórico.</div>'; return; }
+      el.innerHTML = items.map(h => `
+        <div class="list-item">
+          <div class="favicon" style="width:32px;height:32px;border-radius:8px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-weight:700;">${faviconLetter(h.url)}</div>
+          <div class="meta" onclick="location.href='browser.html?url=${encodeURIComponent(h.url)}'">
+            <div class="title">${sanitizeText(h.title)}</div>
+            <div class="sub">${formatDate(h.visitedAt)}</div>
+          </div>
+          <button class="icon-btn" onclick="removeItem(${h.id})">🗑</button>
+        </div>`).join('');
+    }
+
+    async function removeItem(id) {
+      await History.remove(id);
+      render();
+    }
+
+    document.getElementById('searchHist').addEventListener('input', e => render(e.target.value));
+    document.getElementById('clearBtn').addEventListener('click', async () => {
+      if (confirm('Limpar todo o histórico?')) { await History.clear(); render(); }
+    });
+
+    render();
+  </script>
+</body>
+</html>
