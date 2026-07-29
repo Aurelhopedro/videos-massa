@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Início — VideosMassa Browser</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <button class="icon-btn" onclick="location.href='settings.html'">⚙️</button>
+    <input type="text" id="omnibox" placeholder="Pesquisar ou digitar um endereço">
+    <button class="icon-btn" id="goBtn">➜</button>
+  </div>
+
+  <main>
+    <div class="section-title">Atalhos</div>
+    <div class="grid" id="shortcuts"></div>
+
+    <div class="section-title">Recentes</div>
+    <div id="recentList"></div>
+
+    <div class="section-title">Favoritos</div>
+    <div id="favoritesPreview"></div>
+  </main>
+
+  <nav class="bottombar">
+    <a href="index.html" class="active">🏠<span>Início</span></a>
+    <a href="browser.html">🌐<span>Navegar</span></a>
+    <a href="favorites.html">⭐<span>Favoritos</span></a>
+    <a href="history.html">🕓<span>Histórico</span></a>
+    <a href="downloads.html">⬇️<span>Downloads</span></a>
+  </nav>
+
+  <script src="js/db.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/favorites.js"></script>
+  <script src="js/history.js"></script>
+  <script>
+    const SHORTCUTS = [
+      { name: 'Google', url: 'https://www.google.com' },
+      { name: 'Bing', url: 'https://www.bing.com' },
+      { name: 'DuckDuckGo', url: 'https://duckduckgo.com' },
+      { name: 'Archive.org', url: 'https://archive.org' },
+      { name: 'Wikipedia', url: 'https://wikipedia.org' }
+    ];
+
+    function goTo(url) {
+      location.href = `browser.html?url=${encodeURIComponent(url)}`;
+    }
+
+    function renderShortcuts() {
+      const el = document.getElementById('shortcuts');
+      el.innerHTML = SHORTCUTS.map(s => `
+        <div class="shortcut" onclick="goTo('${s.url}')">
+          <div class="favicon">${s.name.charAt(0)}</div>
+          <span>${s.name}</span>
+        </div>`).join('');
+    }
+
+    async function renderRecent() {
+      const items = (await History.all()).slice(0, 5);
+      const el = document.getElementById('recentList');
+      if (items.length === 0) { el.innerHTML = '<div class="empty-state">Nenhum site visitado ainda.</div>'; return; }
+      el.innerHTML = items.map(h => `
+        <div class="list-item" onclick="goTo('${h.url}')">
+          <div class="favicon" style="width:32px;height:32px;border-radius:8px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-weight:700;">${faviconLetter(h.url)}</div>
+          <div class="meta">
+            <div class="title">${sanitizeText(h.title)}</div>
+            <div class="sub">${formatDate(h.visitedAt)}</div>
+          </div>
+        </div>`).join('');
+    }
+
+    async function renderFavorites() {
+      const items = (await Favorites.all()).slice(0, 5);
+      const el = document.getElementById('favoritesPreview');
+      if (items.length === 0) { el.innerHTML = '<div class="empty-state">Nenhum favorito ainda.</div>'; return; }
+      el.innerHTML = items.map(f => `
+        <div class="list-item" onclick="goTo('${f.url}')">
+          <div class="favicon" style="width:32px;height:32px;border-radius:8px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-weight:700;">${faviconLetter(f.url)}</div>
+          <div class="meta">
+            <div class="title">${sanitizeText(f.title)}</div>
+            <div class="sub">${f.folder}</div>
+          </div>
+        </div>`).join('');
+    }
+
+    document.getElementById('goBtn').addEventListener('click', submitOmnibox);
+    document.getElementById('omnibox').addEventListener('keydown', e => { if (e.key === 'Enter') submitOmnibox(); });
+
+    async function submitOmnibox() {
+      const val = document.getElementById('omnibox').value;
+      const direct = normalizeUrl(val);
+      const engine = await DB.getSetting('searchEngine', 'google');
+      goTo(direct || buildSearchUrl(engine, val));
+    }
+
+    renderShortcuts();
+    renderRecent();
+    renderFavorites();
+  </script>
+</body>
+</html>
