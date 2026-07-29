@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Navegar — VideosMassa Browser</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <button class="icon-btn" id="backBtn">←</button>
+    <button class="icon-btn" id="fwdBtn">→</button>
+    <button class="icon-btn" id="reloadBtn">⟳</button>
+    <input type="text" id="addressBar" placeholder="Pesquisar ou digitar um endereço">
+    <button class="icon-btn" id="starBtn">☆</button>
+    <button class="icon-btn" id="newTabBtn">+</button>
+  </div>
+
+  <div class="tabs-strip" id="tabsStrip"></div>
+
+  <main style="max-width:100%;padding:10px;">
+    <iframe id="frame" class="browser-frame" src="about:blank" referrerpolicy="no-referrer"></iframe>
+    <div id="blockedNotice" class="empty-state" style="display:none;">
+      Este site não permite ser exibido dentro do navegador (proteção do próprio site).
+      Toque em "Abrir no navegador do sistema" para acessá-lo normalmente.
+      <br><br>
+      <button class="primary" id="openExternalBtn">Abrir no navegador do sistema</button>
+    </div>
+  </main>
+
+  <nav class="bottombar">
+    <a href="index.html">🏠<span>Início</span></a>
+    <a href="browser.html" class="active">🌐<span>Navegar</span></a>
+    <a href="favorites.html">⭐<span>Favoritos</span></a>
+    <a href="history.html">🕓<span>Histórico</span></a>
+    <a href="downloads.html">⬇️<span>Downloads</span></a>
+  </nav>
+
+  <script src="js/db.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/tabs.js"></script>
+  <script src="js/favorites.js"></script>
+  <script src="js/history.js"></script>
+  <script>
+    const frame = document.getElementById('frame');
+    const addressBar = document.getElementById('addressBar');
+    const blockedNotice = document.getElementById('blockedNotice');
+    let loadTimer = null;
+
+    async function init() {
+      await Tabs.load();
+      const params = new URLSearchParams(location.search);
+      const startUrl = params.get('url');
+      if (startUrl) {
+        await Tabs.updateActive(startUrl, startUrl);
+      }
+      renderTabsStrip();
+      loadActiveTab();
+    }
+
+    function renderTabsStrip() {
+      Tabs.renderStrip(document.getElementById('tabsStrip'), () => {
+        renderTabsStrip();
+        loadActiveTab();
+      });
+    }
+
+    function loadActiveTab() {
+      const tab = Tabs.getActive();
+      if (!tab || !tab.url) { frame.src = 'about:blank'; addressBar.value = ''; return; }
+      addressBar.value = tab.url;
+      navigateTo(tab.url, false);
+    }
+
+    function navigateTo(url, record = true) {
+      blockedNotice.style.display = 'none';
+      frame.style.display = 'block';
+      frame.src = url;
+
+      clearTimeout(loadTimer);
+      // Se o site bloquear iframe (X-Frame-Options/CSP), o onload não dispara
+      // conteúdo real; usamos um tempo limite simples como indicativo.
+      loadTimer = setTimeout(() => {
+        try {
+          // Acesso cross-origin lança erro; isso é esperado e normal.
+          const _ = frame.contentWindow.location.href;
+        } catch (e) {
+          // Não temos como confirmar 100% se foi bloqueado, então deixamos
+          // o iframe como está e apenas oferecemos a opção de abrir externo.
+        }
+      }, 1500);
+
+      if (record) {
+        Tabs.updateActive(url, url);
+        History.record(url, url);
+      }
+      window.currentUrl = url;
+    }
+
+    document.getElementById('addressBar').addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return;
+      const val = e.target.value;
+      const direct = normalizeUrl(val);
+      const engine = await DB.getSetting('searchEngine', 'google');
+      const url = direct || buildSearchUrl(engine, val);
+      navigateTo(url);
+    });
+
+    document.getElementById('reloadBtn').addEventListener('click', () => {
+      if (window.currentUrl) navigateTo(window.currentUrl, false);
+    });
+
+    document.getElementById('backBtn').addEventListener('click', () => {
+      try { frame.contentWindow.history.back(); } catch {}
+    });
+    document.getElementById('fwdBtn').addEventListener('click', () => {
+      try { frame.contentWindow.history.forward(); } catch {}
+    });
+
+    document.getElementById('newTabBtn').addEventListener('click', async () => {
+      await Tabs.create();
+      renderTabsStrip();
+      loadActiveTab();
+    });
+
+    document.getElementById('starBtn').addEventListener('click', async () => {
+      const tab = Tabs.getActive();
+      if (!tab || !tab.url) return;
+      await Favorites.add(tab.url, tab.title);
+    });
+
+    document.getElementById('openExternalBtn').addEventListener('click', () => {
+      if (window.currentUrl) window.open(window.currentUrl, '_blank');
+    });
+
+    init();
+  </script>
+</body>
+</html>
