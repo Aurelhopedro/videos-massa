@@ -48,6 +48,25 @@
     const blockedNotice = document.getElementById('blockedNotice');
     let loadTimer = null;
 
+    // Domínios que se sabe recusarem ser exibidos em iframe (X-Frame-Options / CSP frame-ancestors).
+    // Não é uma lista exaustiva, mas cobre os casos mais comuns que o utilizador vai encontrar.
+    const IFRAME_BLOCKED_DOMAINS = [
+      'google.com', 'accounts.google.com', 'mail.google.com', 'drive.google.com',
+      'docs.google.com', 'youtube.com', 'facebook.com', 'instagram.com', 'twitter.com',
+      'x.com', 'linkedin.com', 'github.com', 'whatsapp.com', 'web.whatsapp.com',
+      'netflix.com', 'amazon.com', 'tiktok.com', 'reddit.com', 'paypal.com',
+      'apple.com', 'microsoft.com', 'live.com', 'outlook.com'
+    ];
+
+    function isIframeBlockedDomain(url) {
+      try {
+        const host = new URL(url).hostname.replace(/^www\./, '');
+        return IFRAME_BLOCKED_DOMAINS.some(d => host === d || host.endsWith('.' + d));
+      } catch {
+        return false;
+      }
+    }
+
     async function init() {
       await Tabs.load();
       const params = new URLSearchParams(location.search);
@@ -73,23 +92,36 @@
       navigateTo(tab.url, false);
     }
 
+    function showBlockedNotice(url) {
+      frame.style.display = 'none';
+      frame.src = 'about:blank';
+      blockedNotice.style.display = 'block';
+      window.currentUrl = url;
+    }
+
     function navigateTo(url, record = true) {
+      clearTimeout(loadTimer);
+
+      // Se já sabemos que o domínio bloqueia iframe, nem tentamos carregar —
+      // mostramos o aviso na hora, em vez de esperar um timeout que pode falhar.
+      if (isIframeBlockedDomain(url)) {
+        showBlockedNotice(url);
+        if (record) {
+          Tabs.updateActive(url, url);
+          History.record(url, url);
+        }
+        return;
+      }
+
       blockedNotice.style.display = 'none';
       frame.style.display = 'block';
       frame.src = url;
 
-      clearTimeout(loadTimer);
-      // Se o site bloquear iframe (X-Frame-Options/CSP), o onload não dispara
-      // conteúdo real; usamos um tempo limite simples como indicativo.
-      loadTimer = setTimeout(() => {
-        try {
-          // Acesso cross-origin lança erro; isso é esperado e normal.
-          const _ = frame.contentWindow.location.href;
-        } catch (e) {
-          // Não temos como confirmar 100% se foi bloqueado, então deixamos
-          // o iframe como está e apenas oferecemos a opção de abrir externo.
-        }
-      }, 1500);
+      // Para domínios fora da lista conhecida, ainda pode haver bloqueio via
+      // X-Frame-Options/CSP que não prevemos. Detectar isso com certeza a partir
+      // do JS não é possível (erro cross-origin ocorre em ambos os casos), então
+      // usamos o evento 'error' do iframe como sinal auxiliar quando disponível.
+      frame.onerror = () => showBlockedNotice(url);
 
       if (record) {
         Tabs.updateActive(url, url);
