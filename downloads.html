@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Downloads — VideosMassa Browser</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <strong style="flex:1;padding-left:8px;">Downloads</strong>
+    <select id="filterStatus" style="padding:6px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);">
+      <option value="">Todos</option>
+      <option value="baixando">Baixando</option>
+      <option value="concluido">Concluído</option>
+      <option value="cancelado">Cancelado</option>
+      <option value="erro">Erro</option>
+    </select>
+  </div>
+
+  <main>
+    <div class="form-row">
+      <label>Link direto de arquivo (ex: .mp4, .pdf, .zip de fontes permitidas)</label>
+      <input type="url" id="newUrl" placeholder="https://exemplo.com/arquivo.mp4">
+      <button class="primary" id="addDownloadBtn" style="margin-top:6px;">Adicionar download</button>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <label style="font-size:13px;"><input type="checkbox" id="selectAll"> Selecionar todos</label>
+      <button class="ghost" id="deleteSelectedBtn">Excluir selecionados</button>
+    </div>
+
+    <div id="list"></div>
+  </main>
+
+  <nav class="bottombar">
+    <a href="index.html">🏠<span>Início</span></a>
+    <a href="browser.html">🌐<span>Navegar</span></a>
+    <a href="favorites.html">⭐<span>Favoritos</span></a>
+    <a href="history.html">🕓<span>Histórico</span></a>
+    <a href="downloads.html" class="active">⬇️<span>Downloads</span></a>
+  </nav>
+
+  <script src="js/db.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/downloads.js"></script>
+  <script>
+    let refreshTimer = null;
+
+    async function render() {
+      const filter = document.getElementById('filterStatus').value;
+      let items = await Downloads.list();
+      if (filter) items = items.filter(d => d.status === filter);
+      const el = document.getElementById('list');
+      if (items.length === 0) { el.innerHTML = '<div class="empty-state">Nenhum download ainda.</div>'; return; }
+
+      el.innerHTML = items.map(d => {
+        const pct = d.totalBytes ? Math.round((d.receivedBytes / d.totalBytes) * 100) : 0;
+        return `
+        <div class="list-item">
+          <input type="checkbox" class="sel" data-id="${d.id}">
+          <div class="meta">
+            <div class="title">${sanitizeText(d.filename)}</div>
+            <div class="sub">${statusLabel(d.status)} • ${formatBytes(d.receivedBytes)}${d.totalBytes ? ' / ' + formatBytes(d.totalBytes) : ''}</div>
+            ${d.status === 'baixando' ? `<div class="progress-bar"><div style="width:${pct}%"></div></div>` : ''}
+          </div>
+          ${d.status === 'baixando' ? `<button class="icon-btn" onclick="Downloads.cancel(${d.id})">⏹</button>` : ''}
+          ${d.status === 'erro' || d.status === 'cancelado' ? `<button class="icon-btn" onclick="retryDl(${d.id})">↻</button>` : ''}
+          <button class="icon-btn" onclick="removeDl(${d.id})">🗑</button>
+        </div>`;
+      }).join('');
+    }
+
+    function statusLabel(s) {
+      return { baixando: 'Baixando', concluido: 'Concluído', cancelado: 'Cancelado', erro: 'Erro' }[s] || s;
+    }
+
+    async function retryDl(id) { await Downloads.retry(id); render(); }
+    async function removeDl(id) { await Downloads.remove(id); render(); }
+
+    document.getElementById('addDownloadBtn').addEventListener('click', async () => {
+      const url = document.getElementById('newUrl').value.trim();
+      if (!url) return;
+      document.getElementById('newUrl').value = '';
+      Downloads.start(url);
+      render();
+    });
+
+    document.getElementById('filterStatus').addEventListener('change', render);
+
+    document.getElementById('selectAll').addEventListener('change', (e) => {
+      document.querySelectorAll('.sel').forEach(cb => cb.checked = e.target.checked);
+    });
+
+    document.getElementById('deleteSelectedBtn').addEventListener('click', async () => {
+      const ids = [...document.querySelectorAll('.sel:checked')].map(cb => Number(cb.dataset.id));
+      for (const id of ids) await Downloads.remove(id);
+      render();
+    });
+
+    render();
+    refreshTimer = setInterval(render, 1000);
+  </script>
+</body>
+</html>
